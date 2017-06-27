@@ -1,3 +1,5 @@
+#include <PID_v1.h>
+
 #define speedInput 2
 
 #define brake A4
@@ -8,7 +10,7 @@
 #define PWM1 3
 #define PWM2 11
 
-#define PEDAL1MAX 200
+#define PEDAL1MAX 220
 
 #define pedal1 A0
 #define pedal2 A1
@@ -31,6 +33,8 @@ unsigned long currentSpeed = 0;
 unsigned long lastStoredSpeed = 0;
 unsigned long speeds[5] = {0,0,0,0,0};
 
+double Setpoint, Input, Output;
+
 //misc
 byte mode; //0 - bypass, 1 - cruise
 unsigned long prevMicroTime = 0;
@@ -40,12 +44,17 @@ int tmp;
 int prevReadMode = 0;
 unsigned long prevReadModeTime;
 
+//double Kp=0.0005, Ki=0.05, Kd=0.001;
+double Kp=0.001, Ki=0.05, Kd=0.001;
+PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, REVERSE);
+
 void setup() {
   Serial.begin(230400);
   pinMode(led, OUTPUT);
   pinMode(speedInput, INPUT);
   mode = 0;
   attachInterrupt(digitalPinToInterrupt(speedInput), measureSpeed, FALLING);
+  myPID.SetSampleTime(10);
 }
 
 void measureSpeed(){
@@ -53,7 +62,9 @@ void measureSpeed(){
     speeds[i-1] = speeds[i]; 
   }
   
-  speeds[4] = micros() - prevMicroTime;
+  currentSpeed = micros() - prevMicroTime;
+  Input = (float) currentSpeed;
+  speeds[4] = currentSpeed;
   prevMicroTime = micros();
   tmp++;
 }
@@ -80,19 +91,17 @@ void debugOut() {
     Serial.print(" m:");
     Serial.print(mode);
     Serial.print(" curSpd:");
-    Serial.print(speeds[0]);
-    Serial.print(" ");
-    Serial.print(speeds[1]);
-    Serial.print(" ");
-    Serial.print(speeds[2]);
-    Serial.print(" ");
-    Serial.print(speeds[3]);
-    Serial.print(" ");
-    Serial.print(speeds[4]);
+    Serial.print(currentSpeed);
     Serial.print(" keepSpd:");
     Serial.print(keepSpeed);
     Serial.print(" lastStoredSpd:");
     Serial.print(lastStoredSpeed);
+    Serial.print(" Input:");
+    Serial.print(Input);
+    Serial.print(" Output:");
+    Serial.print(Output);
+    Serial.print(" Setpoint:");
+    Serial.print(Setpoint);
     Serial.println("");
 
 }
@@ -181,48 +190,24 @@ void cruiseButtonsRead() {
     
     prevReadMode = currentReadMode;
     if(mode > 0) {
+      myPID.SetMode(AUTOMATIC);
       digitalWrite(led, HIGH);
     } else {
+      myPID.SetMode(MANUAL);
       digitalWrite(led, LOW);
     }
 } //ENDOF CruiseButtonsRead
 
-unsigned long cruiseAdjPrevTime;
-void cruiseAdjust() {
-    float k;
-    if (mode > 0) {
-        k = float(keepSpeed) - float(speeds[4]);
-        k = abs(k);
-        k = k / float(keepSpeed + 1);
-        if (k > 1) {k = 1;}
-        k = 1 - k;
-        k = 60000 * k;
-        
-        if (micros() - cruiseAdjPrevTime < int(k)) {
-          return ;
-        }
-        cruiseAdjPrevTime = micros();
-
-        if (speeds[4] == keepSpeed) {return ;}
-
-        if (speeds[4] > keepSpeed) {
-            //speed up
-            cruise1Val++;
-        } else {
-            cruise1Val = cruise1Val-3;
-        }
-      
-        if (cruise1Val < pedal1MinVal) cruise1Val = pedal1MinVal;
-        if (cruise1Val > PEDAL1MAX) cruise1Val = PEDAL1MAX;
-    }
-}
-
 void loop() {
+  myPID.SetOutputLimits(pedal1MinVal, PEDAL1MAX);
   querySwitches();
   pedalRead();
-  pwmWrite();
-  cruiseAdjust();
   cruiseButtonsRead();
-  debugOut();
+  Input = (float) currentSpeed;
+  Setpoint = (float) keepSpeed;
+  myPID.Compute();
+  cruise1Val = (int) Output;
+  pwmWrite();
+  //debugOut();
 }
 
