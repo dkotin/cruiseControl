@@ -5,12 +5,9 @@
 #define brake A4
 #define clutch A5
 #define led 13
-#define speedInput 2
 
 #define PWM1 3
 #define PWM2 11
-
-#define PEDAL1MAX 220
 
 #define pedal1 A0
 #define pedal2 A1
@@ -18,7 +15,8 @@
 
 //sensors values
 int pedal1Val;
-int pedal1MinVal = 255;
+int pedal1MinVal = 50;
+int pedal1MaxVal = 200;
 int pedal2Val;
 int cruise1Val;
 int cruise2Val;
@@ -38,7 +36,6 @@ double Setpoint, Input, Output;
 //misc
 byte mode; //0 - bypass, 1 - cruise
 unsigned long prevMicroTime = 0;
-int tmp;
 
 //buttons reading vars
 int prevReadMode = 0;
@@ -66,7 +63,6 @@ void measureSpeed(){
   Input = (float) currentSpeed;
   speeds[4] = currentSpeed;
   prevMicroTime = micros();
-  tmp++;
 }
 
 
@@ -111,6 +107,7 @@ void pedalRead() {
   pedal1Val = analogRead(pedal1) / 4;
   pedal2Val = analogRead(pedal2) / 4;
   if (pedal1Val < pedal1MinVal) {pedal1MinVal = pedal1Val;}
+  if (pedal1Val > pedal1MaxVal) {pedal1MaxVal = pedal1Val;}
 }
 
 void pwmWrite() {
@@ -164,7 +161,7 @@ void cruiseButtonsRead() {
     }
 
     longPress = (currentReadModeTime-prevReadModeTime>1300) ? true : false;
-    tooShort = (currentReadModeTime-prevReadModeTime<100) ? true : false;
+    tooShort = (currentReadModeTime-prevReadModeTime<70) ? true : false;
     
     if ((currentReadMode == 0 && prevReadMode == 1  || currentReadMode == 1 && longPress) && !tooShort) {
       if (longPress) {
@@ -172,6 +169,7 @@ void cruiseButtonsRead() {
         //mode = 2;
         mode = 1;
         cruise1Val = pedal1Val;
+        Output = (double) pedal1Val;
       } else {
         if (mode > 0) {
           mode = 0;
@@ -180,6 +178,7 @@ void cruiseButtonsRead() {
           keepSpeed = lastStoredSpeed;
           mode  = 1;
           cruise1Val = pedal1Val;
+          Output = (double) pedal1Val;
         }
       }
     }
@@ -199,7 +198,7 @@ void cruiseButtonsRead() {
 } //ENDOF CruiseButtonsRead
 
 void loop() {
-  myPID.SetOutputLimits(pedal1MinVal, PEDAL1MAX);
+  myPID.SetOutputLimits(pedal1MinVal, pedal1MaxVal);
   querySwitches();
   pedalRead();
   cruiseButtonsRead();
