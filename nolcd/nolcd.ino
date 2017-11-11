@@ -26,10 +26,10 @@ byte clutchVal;
 byte brakeVal;
 
 //speeds
-unsigned long keepSpeed = 0;
+double keepSpeed = 0;
 unsigned long currentSpeed = 0;
-unsigned long lastStoredSpeed = 0;
-unsigned long speeds[5] = {0,0,0,0,0};
+double lastStoredSpeed = 0;
+double speeds[5] = {0,0,0,0,0};
 
 double Setpoint, Input, Output;
 
@@ -55,14 +55,17 @@ void setup() {
 }
 
 void measureSpeed(){
+  double tmpSpeed;
   for(int i=1; i<5; i++) { 
     speeds[i-1] = speeds[i]; 
   }
   
   currentSpeed = micros() - prevMicroTime;
-  Input = (float) currentSpeed;
-  speeds[4] = currentSpeed;
+  speeds[4] = (float)currentSpeed;
   prevMicroTime = micros();
+  tmpSpeed = (speeds[0] + speeds[1] + speeds[2] + speeds[3] + speeds[4]) / 5;
+  //Input = (float) currentSpeed;
+  Input = tmpSpeed;
 }
 
 
@@ -174,8 +177,8 @@ void cruiseButtonsRead() {
         if (mode > 0) {
           mode = 0;
         } else {
-          lastStoredSpeed = speeds[4];
-          keepSpeed = lastStoredSpeed;
+          lastStoredSpeed = Input;
+          keepSpeed = Input;
           mode  = 1;
           cruise1Val = pedal1Val;
           Output = (double) pedal1Val;
@@ -202,8 +205,8 @@ void loop() {
   querySwitches();
   pedalRead();
   cruiseButtonsRead();
-  Input = (float) currentSpeed;
-  Setpoint = (float) keepSpeed;
+  Input = currentSpeed;
+  Setpoint = keepSpeed;
   myPID.Compute();
   cruise1Val = (int) Output;
   pwmWrite();
