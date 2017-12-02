@@ -6,7 +6,7 @@
 #define clutch A5
 #define led 13
 
-#define PWM1 3
+#define PWM1 9
 #define PWM2 11
 
 #define pedal1 A0
@@ -26,10 +26,10 @@ byte clutchVal;
 byte brakeVal;
 
 //speeds
-double keepSpeed = 0;
+unsigned long keepSpeed = 0;
 unsigned long currentSpeed = 0;
-double lastStoredSpeed = 0;
-double speeds[5] = {0,0,0,0,0};
+unsigned long lastStoredSpeed = 0;
+unsigned long speeds[5] = {0,0,0,0,0};
 
 double Setpoint, Input, Output;
 
@@ -42,39 +42,39 @@ int prevReadMode = 0;
 unsigned long prevReadModeTime;
 
 //double Kp=0.0005, Ki=0.05, Kd=0.001;
-double Kp=0.001, Ki=0.05, Kd=0.001;
+double Kp=0.001, Ki=0.04, Kd=0.001;
 PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, REVERSE);
 
 void setup() {
-  Serial.begin(230400);
-  pinMode(led, OUTPUT);
-  pinMode(speedInput, INPUT);
+  pedalRead();
   mode = 0;
+  pwmWrite();
+  pinMode(speedInput, INPUT);
+  pinMode(led, OUTPUT);
   attachInterrupt(digitalPinToInterrupt(speedInput), measureSpeed, FALLING);
   myPID.SetSampleTime(10);
+  Serial.begin(230400);
 }
 
 void measureSpeed(){
-  double tmpSpeed;
   for(int i=1; i<5; i++) { 
     speeds[i-1] = speeds[i]; 
   }
   
   currentSpeed = micros() - prevMicroTime;
-  speeds[4] = (float)currentSpeed;
+  speeds[4] = currentSpeed;
+  Input = ( (float) speeds[2] + (float) speeds[3] + (float) speeds[4] ) / 3;
   prevMicroTime = micros();
-  tmpSpeed = (speeds[0] + speeds[1] + speeds[2] + speeds[3] + speeds[4]) / 5;
-  //Input = (float) currentSpeed;
-  Input = tmpSpeed;
 }
 
 
 unsigned long debugPrevTime = 0;
 void debugOut() {
-    if (micros() - debugPrevTime < 500000) {
+    if (micros() - debugPrevTime < 200000) {
       return ;
     }
     debugPrevTime = micros();    
+    /*
     Serial.print("cl:");
     Serial.print( clutchVal);
     Serial.print(" br:");
@@ -102,7 +102,10 @@ void debugOut() {
     Serial.print(" Setpoint:");
     Serial.print(Setpoint);
     Serial.println("");
-
+    */
+    Serial.print(" Output:");
+    Serial.print(Output);
+    Serial.println("");
 }
 
 
@@ -126,6 +129,7 @@ void pwmWrite() {
           } else {
             analogWrite(PWM1, pedal1Val);  
             analogWrite(PWM2, pedal2Val);
+            Output = (double) pedal1Val;
           }
         break;
       case 0:
@@ -177,8 +181,8 @@ void cruiseButtonsRead() {
         if (mode > 0) {
           mode = 0;
         } else {
-          lastStoredSpeed = Input;
-          keepSpeed = Input;
+          lastStoredSpeed = speeds[4];
+          keepSpeed = lastStoredSpeed;
           mode  = 1;
           cruise1Val = pedal1Val;
           Output = (double) pedal1Val;
@@ -205,8 +209,8 @@ void loop() {
   querySwitches();
   pedalRead();
   cruiseButtonsRead();
-  Input = currentSpeed;
-  Setpoint = keepSpeed;
+  Input = (float) currentSpeed;
+  Setpoint = (float) keepSpeed;
   myPID.Compute();
   cruise1Val = (int) Output;
   pwmWrite();
