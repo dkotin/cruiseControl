@@ -27,85 +27,55 @@ byte brakeVal;
 
 //speeds
 unsigned long keepSpeed = 0;
-unsigned long currentSpeed = 0;
 unsigned long lastStoredSpeed = 0;
-unsigned long speeds[5] = {0,0,0,0,0};
+
+volatile unsigned long currentSpeed = 0;
+volatile unsigned long prevMicroTime = 0;
 
 double Setpoint, Input, Output;
 
-//misc
 byte mode; //0 - bypass, 1 - cruise
-unsigned long prevMicroTime = 0;
 
 //buttons reading vars
 int prevReadMode = 0;
 unsigned long prevReadModeTime;
 
+//manual speed measuring
+volatile int prevSpeedState = 0;
+volatile unsigned long prevSpeedStateTime;
+volatile unsigned long manuallyReadSpeed;
+
 //double Kp=0.0005, Ki=0.05, Kd=0.001;
-double Kp=0.001, Ki=0.04, Kd=0.001;
+// double Kp=0.001, Ki=0.04, Kd=0.001; // -> these worked with interrupt-based speed reading
+// double Kp=0.002, Ki=0.1, Kd=0.002; //-> slow reaction, about 1s before speed changing
+double Kp=0.001, Ki=0.04, Kd=0.001; 
 PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, REVERSE);
 
 void setup() {
   pedalRead();
   mode = 0;
   pwmWrite();
-  pinMode(speedInput, INPUT);
+  pinMode(speedInput, INPUT_PULLUP); //INPUT or INPUT_PULLUP
   pinMode(led, OUTPUT);
-  attachInterrupt(digitalPinToInterrupt(speedInput), measureSpeed, FALLING);
-  myPID.SetSampleTime(10);
+  digitalWrite(led, HIGH);
+//  attachInterrupt(digitalPinToInterrupt(speedInput), measureSpeed, FALLING);
+  myPID.SetSampleTime(20); //50 gives too slow reaction, 10 gives too fast trottling
   Serial.begin(230400);
 }
 
 void measureSpeed(){
-  for(int i=1; i<5; i++) { 
-    speeds[i-1] = speeds[i]; 
-  }
-  
   currentSpeed = micros() - prevMicroTime;
-  speeds[4] = currentSpeed;
-  Input = ( (float) speeds[2] + (float) speeds[3] + (float) speeds[4] ) / 3;
   prevMicroTime = micros();
 }
 
 
 unsigned long debugPrevTime = 0;
 void debugOut() {
-    if (micros() - debugPrevTime < 200000) {
+    if (micros() - debugPrevTime < 300000) {
       return ;
     }
-    debugPrevTime = micros();    
-    /*
-    Serial.print("cl:");
-    Serial.print( clutchVal);
-    Serial.print(" br:");
-    Serial.print(brakeVal);
-    Serial.print(" p:");
-    Serial.print(pedal1Val);
-    Serial.print("/");
-    Serial.print(pedal2Val);
-    Serial.print(" cruisePedal:");
-    Serial.print(cruise1Val);
-    Serial.print("/");
-    Serial.print(cruise2Val);
-    Serial.print(" m:");
-    Serial.print(mode);
-    Serial.print(" curSpd:");
-    Serial.print(currentSpeed);
-    Serial.print(" keepSpd:");
-    Serial.print(keepSpeed);
-    Serial.print(" lastStoredSpd:");
-    Serial.print(lastStoredSpeed);
-    Serial.print(" Input:");
-    Serial.print(Input);
-    Serial.print(" Output:");
-    Serial.print(Output);
-    Serial.print(" Setpoint:");
-    Serial.print(Setpoint);
-    Serial.println("");
-    */
-    Serial.print(" Output:");
-    Serial.print(Output);
-    Serial.println("");
+    debugPrevTime = micros();  
+    Serial.println(manuallyReadSpeed);
 }
 
 
@@ -151,6 +121,16 @@ void querySwitches() {
     }
 }
 
+void manualSpeedRead() {
+  int currentState;
+  currentState = digitalRead(speedInput);
+  if (prevSpeedState == 0 && currentState == 1) {
+    manuallyReadSpeed = micros() - prevSpeedStateTime;
+    prevSpeedStateTime = micros();
+  }
+  prevSpeedState = currentState;
+}
+
 void cruiseButtonsRead() {
     int val;
     int currentReadMode;
@@ -173,7 +153,6 @@ void cruiseButtonsRead() {
     if ((currentReadMode == 0 && prevReadMode == 1  || currentReadMode == 1 && longPress) && !tooShort) {
       if (longPress) {
         keepSpeed = lastStoredSpeed;
-        //mode = 2;
         mode = 1;
         cruise1Val = pedal1Val;
         Output = (double) pedal1Val;
@@ -181,7 +160,7 @@ void cruiseButtonsRead() {
         if (mode > 0) {
           mode = 0;
         } else {
-          lastStoredSpeed = speeds[4];
+          lastStoredSpeed = currentSpeed;
           keepSpeed = lastStoredSpeed;
           mode  = 1;
           cruise1Val = pedal1Val;
@@ -206,6 +185,8 @@ void cruiseButtonsRead() {
 
 void loop() {
   myPID.SetOutputLimits(pedal1MinVal, pedal1MaxVal);
+  manualSpeedRead();
+  currentSpeed = manuallyReadSpeed;
   querySwitches();
   pedalRead();
   cruiseButtonsRead();
