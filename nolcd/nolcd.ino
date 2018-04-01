@@ -46,12 +46,19 @@ volatile unsigned long prevSpeedStateTime;
 volatile unsigned long manuallyReadSpeed;
 
 //double Kp=0.0005, Ki=0.05, Kd=0.001;
-// double Kp=0.001, Ki=0.04, Kd=0.001; // -> these worked with interrupt-based speed reading
+// double Kp=0.001, Ki=0.04, Kd=0.001; // -> these worked with interrupt-based speed reading. now too slow reaction
 // double Kp=0.002, Ki=0.1, Kd=0.002; //-> slow reaction, about 1s before speed changing
-double Kp=0.001, Ki=0.04, Kd=0.001; 
+// double Kp=0.001, Ki=0.04, Kd=0.004; // -> too fast reaction, keeps speed but operates the pedal too fast
+// double Kp=0.001, Ki=0.04, Kd=0.003; // -> too much speed fluctuating, faster pedal reaction <-- driveable
+// double Kp=0.001, Ki=0.07, Kd=0.003; // -> no checkengine finally, too fast and too fluctuating (t = 15)
+double Kp=0.001, Ki=0.03, Kd=0.004; // -> no checkengine finally
+
 PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, REVERSE);
 
 void setup() {
+  analogWrite(PWM1, 36);  
+  analogWrite(PWM2, 18);
+
   pedalRead();
   mode = 0;
   pwmWrite();
@@ -59,7 +66,7 @@ void setup() {
   pinMode(led, OUTPUT);
   digitalWrite(led, HIGH);
 //  attachInterrupt(digitalPinToInterrupt(speedInput), measureSpeed, FALLING);
-  myPID.SetSampleTime(20); //50 gives too slow reaction, 10 gives too fast trottling
+  myPID.SetSampleTime(30); //50 gives too slow reaction, 10 gives too fast trottling
   Serial.begin(230400);
 }
 
@@ -75,7 +82,7 @@ void debugOut() {
       return ;
     }
     debugPrevTime = micros();  
-    Serial.println(manuallyReadSpeed);
+    //Serial.println(manuallyReadSpeed);
 }
 
 
