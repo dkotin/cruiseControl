@@ -51,9 +51,25 @@ volatile unsigned long manuallyReadSpeed;
 // double Kp=0.001, Ki=0.04, Kd=0.004; // -> too fast reaction, keeps speed but operates the pedal too fast
 // double Kp=0.001, Ki=0.04, Kd=0.003; // -> too much speed fluctuating, faster pedal reaction <-- driveable
 // double Kp=0.001, Ki=0.07, Kd=0.003; // -> no checkengine finally, too fast and too fluctuating (t = 15)
-double Kp=0.001, Ki=0.03, Kd=0.004; // -> no checkengine finally
+//double Kp=0.001, Ki=0.03, Kd=0.004; // -> no checkengine finally, not bad  30 ms
+//double Kp=0.025, Ki=0.03, Kd=0.004; // -> smooth 200 time
+//double Kp=0.05, Ki=0, Kd=0;
+//PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, REVERSE);
 
-PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, REVERSE);
+int timeslice=200;
+double Tu=1.5;
+double Ku = 0.04;
+
+//Ziegler-Nichols method modified
+PID myPID(
+  &Input, 
+  &Output, 
+  &Setpoint, 
+  0.6 * Ku,
+  Ku * 0.6 * 2 / Tu,
+  Ku * Tu / 70,
+  REVERSE
+  );
 
 void setup() {
   analogWrite(PWM1, 36);  
@@ -66,7 +82,8 @@ void setup() {
   pinMode(led, OUTPUT);
   digitalWrite(led, HIGH);
 //  attachInterrupt(digitalPinToInterrupt(speedInput), measureSpeed, FALLING);
-  myPID.SetSampleTime(30); //50 gives too slow reaction, 10 gives too fast trottling
+  myPID.SetSampleTime(timeslice); 
+  
   Serial.begin(230400);
 }
 
