@@ -46,18 +46,19 @@ volatile int prevSpeedState = 0;
 volatile unsigned long prevSpeedStateTime;
 volatile unsigned long manuallyReadSpeed;
 
-int timeslice=200;
-double Tu=1.5;
-double Ku = 0.04;
+//int timeslice=200;
+int timeslice=500;
+double Tu = 2; //1.5
+double Ku = 1.3; // 1
 
-int speedReadPeriod = 100;
+int speedReadPeriod = 500;
 volatile unsigned long prevReadTime = 0;
 volatile unsigned long curReadTime = 0;
-volatile unsigned long speedImps;
-volatile unsigned long lastMeasuredImps;
+volatile unsigned long speedImps = 0;
+volatile unsigned long lastMeasuredImps = 0;
 
 //Ziegler-Nichols method modified
-PID myPID(
+/*PID myPID(
   &Input, 
   &Output, 
   &Setpoint, 
@@ -66,6 +67,18 @@ PID myPID(
   Ku * Tu / 70,           //differential
   REVERSE
   );
+*/
+
+PID myPID(
+  &Input, 
+  &Output, 
+  &Setpoint, 
+  0.6 * Ku,               //proportional
+  0.6 * Ku * 3 / Tu,      //integral 0.6 * * 2 /
+  Ku * Tu / 70,           //differential
+  DIRECT
+  );
+
   
 void setup() {
   analogWrite(PWM1, 36);  
@@ -77,7 +90,7 @@ void setup() {
   pinMode(speedInput, INPUT_PULLUP); //INPUT or INPUT_PULLUP
   pinMode(led, OUTPUT);
   digitalWrite(led, HIGH);
-  attachInterrupt(digitalPinToInterrupt(speedInput), measureSpeed, FALLING);
+  //attachInterrupt(digitalPinToInterrupt(speedInput), measureSpeed, FALLING);
   myPID.SetSampleTime(timeslice); 
   
   Serial.begin(230400);
@@ -99,7 +112,7 @@ void measureSpeed(){
 
 unsigned long debugPrevTime = 0;
 void debugOut() {
-    if (micros() - debugPrevTime < 300000) {
+    if (micros() - debugPrevTime < 1000000) {
       return ;
     }
     debugPrevTime = micros();  
@@ -158,8 +171,20 @@ void manualSpeedRead() {
   int currentState;
   currentState = digitalRead(speedInput);
   if (prevSpeedState == 0 && currentState == 1) {
-    manuallyReadSpeed = micros() - prevSpeedStateTime;
+    //manuallyReadSpeed = micros() - prevSpeedStateTime;
     prevSpeedStateTime = micros();
+
+
+    curReadTime = millis();
+    speedImps ++;
+    if (curReadTime - prevReadTime > speedReadPeriod) {
+      prevReadTime = curReadTime;
+      lastMeasuredImps = speedImps;
+      manuallyReadSpeed = lastMeasuredImps;
+      speedImps = 0;
+    }
+
+  
   }
   prevSpeedState = currentState;
 }
