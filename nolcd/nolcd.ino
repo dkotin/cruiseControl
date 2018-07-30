@@ -13,6 +13,7 @@
 #define pedal2 A1
 #define button A3
 
+
 //sensors values
 int pedal1Val;
 int pedal1MinVal = 50;
@@ -45,32 +46,27 @@ volatile int prevSpeedState = 0;
 volatile unsigned long prevSpeedStateTime;
 volatile unsigned long manuallyReadSpeed;
 
-//double Kp=0.0005, Ki=0.05, Kd=0.001;
-// double Kp=0.001, Ki=0.04, Kd=0.001; // -> these worked with interrupt-based speed reading. now too slow reaction
-// double Kp=0.002, Ki=0.1, Kd=0.002; //-> slow reaction, about 1s before speed changing
-// double Kp=0.001, Ki=0.04, Kd=0.004; // -> too fast reaction, keeps speed but operates the pedal too fast
-// double Kp=0.001, Ki=0.04, Kd=0.003; // -> too much speed fluctuating, faster pedal reaction <-- driveable
-// double Kp=0.001, Ki=0.07, Kd=0.003; // -> no checkengine finally, too fast and too fluctuating (t = 15)
-//double Kp=0.001, Ki=0.03, Kd=0.004; // -> no checkengine finally, not bad  30 ms
-//double Kp=0.025, Ki=0.03, Kd=0.004; // -> smooth 200 time
-//double Kp=0.05, Ki=0, Kd=0;
-//PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, REVERSE);
-
 int timeslice=200;
 double Tu=1.5;
 double Ku = 0.04;
+
+int speedReadPeriod = 100;
+volatile unsigned long prevReadTime = 0;
+volatile unsigned long curReadTime = 0;
+volatile unsigned long speedImps;
+volatile unsigned long lastMeasuredImps;
 
 //Ziegler-Nichols method modified
 PID myPID(
   &Input, 
   &Output, 
   &Setpoint, 
-  0.6 * Ku,
-  Ku * 0.6 * 2 / Tu,
-  Ku * Tu / 70,
+  0.6 * Ku,               //proportional
+  0.6 * Ku * 3 / Tu,      //integral 0.6 * * 2 /
+  Ku * Tu / 70,           //differential
   REVERSE
   );
-
+  
 void setup() {
   analogWrite(PWM1, 36);  
   analogWrite(PWM2, 18);
@@ -81,15 +77,23 @@ void setup() {
   pinMode(speedInput, INPUT_PULLUP); //INPUT or INPUT_PULLUP
   pinMode(led, OUTPUT);
   digitalWrite(led, HIGH);
-//  attachInterrupt(digitalPinToInterrupt(speedInput), measureSpeed, FALLING);
+  attachInterrupt(digitalPinToInterrupt(speedInput), measureSpeed, FALLING);
   myPID.SetSampleTime(timeslice); 
   
   Serial.begin(230400);
 }
 
+
 void measureSpeed(){
-  currentSpeed = micros() - prevMicroTime;
-  prevMicroTime = micros();
+  //currentSpeed = micros() - prevMicroTime;
+  //prevMicroTime = micros();
+  curReadTime = millis();
+  speedImps ++;
+  if (curReadTime - prevReadTime > speedReadPeriod) {
+    prevReadTime = curReadTime;
+    lastMeasuredImps = speedImps;
+    speedImps = 0;
+  }
 }
 
 
@@ -99,7 +103,12 @@ void debugOut() {
       return ;
     }
     debugPrevTime = micros();  
+    //Serial.print(pedal1Val);
+    Serial.print(' ');
+    //Serial.print(pedal2Val);
+    Serial.print(' ');
     //Serial.println(manuallyReadSpeed);
+    Serial.println(lastMeasuredImps);
 }
 
 
@@ -171,8 +180,8 @@ void cruiseButtonsRead() {
       //you can add your buttons here
     }
 
-    longPress = (currentReadModeTime-prevReadModeTime>1300) ? true : false;
-    tooShort = (currentReadModeTime-prevReadModeTime<70) ? true : false;
+    longPress = (currentReadModeTime-prevReadModeTime>1000) ? true : false;
+    tooShort = (currentReadModeTime-prevReadModeTime<50) ? true : false;
     
     if ((currentReadMode == 0 && prevReadMode == 1  || currentReadMode == 1 && longPress) && !tooShort) {
       if (longPress) {
@@ -219,6 +228,6 @@ void loop() {
   myPID.Compute();
   cruise1Val = (int) Output;
   pwmWrite();
-  //debugOut();
+  debugOut();
 }
 
