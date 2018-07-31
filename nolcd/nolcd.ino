@@ -43,42 +43,40 @@ unsigned long prevReadModeTime;
 
 //manual speed measuring
 volatile int prevSpeedState = 0;
-volatile unsigned long prevSpeedStateTime;
 volatile unsigned long manuallyReadSpeed;
 
-//int timeslice=200;
 int timeslice=500;
-double Tu = 2; //1.5
-double Ku = 1.3; // 1
+double Ku = 45; // 
+double Tu = 700; //1.5
 
 int speedReadPeriod = 500;
 volatile unsigned long prevReadTime = 0;
 volatile unsigned long curReadTime = 0;
 volatile unsigned long speedImps = 0;
-volatile unsigned long lastMeasuredImps = 0;
 
 //Ziegler-Nichols method modified
-/*PID myPID(
-  &Input, 
-  &Output, 
-  &Setpoint, 
-  0.6 * Ku,               //proportional
-  0.6 * Ku * 3 / Tu,      //integral 0.6 * * 2 /
-  Ku * Tu / 70,           //differential
-  REVERSE
-  );
-*/
-
 PID myPID(
   &Input, 
   &Output, 
-  &Setpoint, 
-  0.6 * Ku,               //proportional
-  0.6 * Ku * 3 / Tu,      //integral 0.6 * * 2 /
-  Ku * Tu / 70,           //differential
+  &Setpoint,                                       //   1.3 1.3      4.5 20    45 200   90 400         45 600
+  0.25 * Ku,               //proportional               0.325        1.125     smooth   slow           best
+  0.001 * Tu         ,      //integral 0.001 .. 0.01    0.0013       0.02               fluctuations   so far
+  0,125 * Tu,             //differential                0.1625       2.5                               increase tu mb
   DIRECT
   );
+/*  
+// http://www.mstarlabs.com/control/znrule.html
+// try diff pi / pd = 1 / 100 and pp = 1/5pd
 
+worked acceptable with:
+  0.6 * Ku,               //proportional             0.78
+  0.6 * Ku * 3 / Tu,      //integral 0.6 * * 2 /    1.17     
+  Ku * Tu / 70,           //differential    0.037
+
+double Tu = 2; //1.5
+double Ku = 1.3; // 1
+overshot means reduce proportional and reduce integral. laziness means increase both. dif should be 2.5 prop.
+*/
   
 void setup() {
   analogWrite(PWM1, 36);  
@@ -98,15 +96,8 @@ void setup() {
 
 
 void measureSpeed(){
-  //currentSpeed = micros() - prevMicroTime;
-  //prevMicroTime = micros();
-  curReadTime = millis();
-  speedImps ++;
-  if (curReadTime - prevReadTime > speedReadPeriod) {
-    prevReadTime = curReadTime;
-    lastMeasuredImps = speedImps;
-    speedImps = 0;
-  }
+  currentSpeed = micros() - prevMicroTime;
+  prevMicroTime = micros();
 }
 
 
@@ -120,8 +111,7 @@ void debugOut() {
     Serial.print(' ');
     //Serial.print(pedal2Val);
     Serial.print(' ');
-    //Serial.println(manuallyReadSpeed);
-    Serial.println(lastMeasuredImps);
+    Serial.println(manuallyReadSpeed);
 }
 
 
@@ -168,26 +158,20 @@ void querySwitches() {
 }
 
 void manualSpeedRead() {
-  int currentState;
-  currentState = digitalRead(speedInput);
-  if (prevSpeedState == 0 && currentState == 1) {
-    //manuallyReadSpeed = micros() - prevSpeedStateTime;
-    prevSpeedStateTime = micros();
-
-
-    curReadTime = millis();
-    speedImps ++;
-    if (curReadTime - prevReadTime > speedReadPeriod) {
-      prevReadTime = curReadTime;
-      lastMeasuredImps = speedImps;
-      manuallyReadSpeed = lastMeasuredImps;
-      speedImps = 0;
+    int currentState;
+    currentState = digitalRead(speedInput);
+    if (prevSpeedState == 0 && currentState == 1) {
+        curReadTime = millis();
+        speedImps ++;
+        if (curReadTime - prevReadTime > speedReadPeriod) {
+          prevReadTime = curReadTime;
+          manuallyReadSpeed = speedImps;
+          speedImps = 0;
+        }
     }
-
-  
-  }
-  prevSpeedState = currentState;
+    prevSpeedState = currentState;
 }
+
 
 void cruiseButtonsRead() {
     int val;
