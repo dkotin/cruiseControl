@@ -18,7 +18,7 @@
 int pedal1Val;
 int pedal1MinVal = 50;
 int pedal1MaxVal = 200;
-int correction = 26; //open collector output voltage loss correction
+int correction = 16; //open collector output voltage loss correction 26
 int pedal2Val;
 int cruise1Val;
 int cruise2Val;
@@ -80,8 +80,8 @@ overshot means reduce proportional and reduce integral. laziness means increase 
 */
 
 void setup() {
-  pedalWrite(PWM1, 36);
-  pedalWrite(PWM2, 18);
+  pedalWrite(PWM1, 0); //36
+  pedalWrite(PWM2, 0); //18
 
   pedalRead();
   mode = 0;
@@ -108,11 +108,11 @@ void debugOut() {
     return ;
   }
   debugPrevTime = micros();
-  //Serial.print(pedal1Val);
+  Serial.print(pedal1Val);
   Serial.print(' ');
-  //Serial.print(pedal2Val);
+  Serial.print(pedal2Val);
   Serial.print(' ');
-  Serial.println(manuallyReadSpeed);
+  //Serial.println(manuallyReadSpeed);
 }
 
 
@@ -253,4 +253,3 @@ void loop() {
   pwmWrite();
   debugOut();
 }
-
