@@ -13,12 +13,14 @@
 #define pedal2 A1
 #define button A3
 
+#define correction1 26;
+#define correction2 28;
+
 
 //sensors values
 int pedal1Val;
 int pedal1MinVal = 50;
 int pedal1MaxVal = 200;
-int correction = 16; //open collector output voltage loss correction 26
 int pedal2Val;
 int cruise1Val;
 int cruise2Val;
@@ -83,8 +85,8 @@ void setup() {
   pedalWrite(PWM1, 0); //36
   pedalWrite(PWM2, 0); //18
 
-  pedalRead();
   mode = 0;
+  pedalRead();
   pwmWrite();
   pinMode(speedInput, INPUT_PULLUP); //INPUT or INPUT_PULLUP
   pinMode(led, OUTPUT);
@@ -119,7 +121,7 @@ void debugOut() {
 void pedalRead() {
   pedal1Val = analogRead(pedal1) / 4;
   pedal2Val = analogRead(pedal2) / 4;
-  if (pedal1Val < pedal1MinVal) {
+  if (pedal1Val < pedal1MinVal && pedal1Val > 3) {
     pedal1MinVal = pedal1Val;
   }
   if (pedal1Val > pedal1MaxVal) {
@@ -231,6 +233,17 @@ void cruiseButtonsRead() {
 } //ENDOF CruiseButtonsRead
 
 void pedalWrite(byte output, int val) {
+  byte correction;
+  switch (output) {
+    case PWM1:
+      correction = correction1;
+      break;
+    case PWM2:
+      correction = correction2;
+      break;
+  }
+  if (val < 3) correction = 0;  //ecu not yet powered up? no corrections. output zero volts.
+  
   if (val + correction > 255) {
     analogWrite(output, 255);
   } else {
