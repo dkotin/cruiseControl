@@ -14,7 +14,7 @@
 #define button A3
 
 #define correction1 26;
-#define correction2 28;
+#define correction2 25;
 
 
 //sensors values
