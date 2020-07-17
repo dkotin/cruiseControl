@@ -16,6 +16,7 @@
 #define correction1 26;
 #define correction2 25;
 
+#define DEBUG_TO_COMPORT_DISABLED
 
 //sensors values
 int pedal1Val;
@@ -49,8 +50,10 @@ volatile int prevSpeedState = 0;
 volatile unsigned long manuallyReadSpeed;
 
 int timeslice = 500;
-double Ku = 45; //
-double Tu = 750; //1.5
+double Ku = 55; //
+double Tu = 600; //1.5
+
+//before soldering: 45 750 - fast and fluctuating, 
 
 int speedReadPeriod = 500;
 volatile unsigned long prevReadTime = 0;
@@ -94,7 +97,9 @@ void setup() {
   //attachInterrupt(digitalPinToInterrupt(speedInput), measureSpeed, FALLING);
   myPID.SetSampleTime(timeslice);
 
-  Serial.begin(230400);
+  #ifdef DEBUG_TO_COMPORT
+    Serial.begin(230400);
+  #endif  
 }
 
 
@@ -106,17 +111,18 @@ void measureSpeed() {
 
 unsigned long debugPrevTime = 0;
 void debugOut() {
-  if (micros() - debugPrevTime < 1000000) {
-    return ;
-  }
-  debugPrevTime = micros();
-  Serial.print(pedal1Val);
-  Serial.print(' ');
-  Serial.print(pedal2Val);
-  Serial.print(' ');
-  //Serial.println(manuallyReadSpeed);
+    if (micros() - debugPrevTime < 1000000) {
+      return ;
+    }
+    debugPrevTime = micros();
+    #ifdef DEBUG_TO_COMPORT
+      Serial.print(pedal1Val);
+      Serial.print(' ');
+      Serial.print(pedal2Val);
+      Serial.print(' ');
+      //Serial.println(manuallyReadSpeed);
+    #endif
 }
-
 
 void pedalRead() {
   pedal1Val = analogRead(pedal1) / 4;
