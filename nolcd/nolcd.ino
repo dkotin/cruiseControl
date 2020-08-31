@@ -16,8 +16,6 @@
 #define correction1 26;
 #define correction2 25;
 
-#define DEBUG_TO_COMPORT_DISABLED
-
 //sensors values
 int pedal1Val;
 int pedal1MinVal = 50;
@@ -50,10 +48,13 @@ volatile int prevSpeedState = 0;
 volatile unsigned long manuallyReadSpeed;
 
 int timeslice = 500;
-double Ku = 55; //
-double Tu = 600; //1.5
+double Ku = 25; //
+double Tu = 900; //1.5
 
 //before soldering: 45 750 - fast and fluctuating, 
+//55 600 - fast and very agressive
+//35 900 - smoother then above
+// 500 / 25 / 900 works perfectly
 
 int speedReadPeriod = 500;
 volatile unsigned long prevReadTime = 0;
@@ -85,6 +86,24 @@ overshot means reduce proportional and reduce integral. laziness means increase 
 */
 
 void setup() {
+  // PWM setup https://alexgyver.ru/lessons/pwm-overclock/
+
+  // pins D9 and D10 - 62.5 kHz
+  // TCCR1A = 0b00000001;  // 8bit
+  // TCCR1B = 0b00001001;  // x1 fast pwm
+
+  // pins D3 and D11 - 62.5 kHz
+  // TCCR2B = 0b00000001;  // x1
+  // TCCR2A = 0b00000011;  // fast pwm
+
+  // pins D9 and D10 - 31.4 kHz
+  TCCR1A = 0b00000001;  // 8bit
+  TCCR1B = 0b00000001;  // x1 phase correct
+
+  // pins D3 and D11 - 31.4 kHz
+  TCCR2B = 0b00000001;  // x1
+  TCCR2A = 0b00000001;  // phase correct 
+
   pedalWrite(PWM1, 0); //36
   pedalWrite(PWM2, 0); //18
 
@@ -97,31 +116,25 @@ void setup() {
   //attachInterrupt(digitalPinToInterrupt(speedInput), measureSpeed, FALLING);
   myPID.SetSampleTime(timeslice);
 
-  #ifdef DEBUG_TO_COMPORT
-    Serial.begin(230400);
-  #endif  
+  Serial.begin(230400);
 }
-
 
 void measureSpeed() {
   currentSpeed = micros() - prevMicroTime;
   prevMicroTime = micros();
 }
 
-
 unsigned long debugPrevTime = 0;
 void debugOut() {
-    if (micros() - debugPrevTime < 1000000) {
-      return ;
-    }
-    debugPrevTime = micros();
-    #ifdef DEBUG_TO_COMPORT
-      Serial.print(pedal1Val);
-      Serial.print(' ');
-      Serial.print(pedal2Val);
-      Serial.print(' ');
-      //Serial.println(manuallyReadSpeed);
-    #endif
+  if (micros() - debugPrevTime < 1000000) {
+    return ;
+  }
+  debugPrevTime = micros();
+  Serial.print(pedal1Val);
+  Serial.print(' ');
+  Serial.print(pedal2Val);
+  Serial.print(' ');
+  //Serial.println(manuallyReadSpeed);
 }
 
 void pedalRead() {
