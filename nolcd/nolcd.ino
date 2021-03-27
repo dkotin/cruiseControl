@@ -2,8 +2,6 @@
 
 #define speedInput 2
 
-#define brake A4
-#define clutch A5
 #define led 13
 
 #define PWM1 9
@@ -12,9 +10,11 @@
 #define pedal1 A0
 #define pedal2 A1
 #define button A3
+#define brake A4
+#define clutch A5
 
-#define correction1 26;
-#define correction2 25;
+#define correction1 26
+#define correction2 25
 
 //sensors values
 int pedal1Val;
@@ -61,6 +61,8 @@ volatile unsigned long prevReadTime = 0;
 volatile unsigned long curReadTime = 0;
 volatile unsigned long speedImps = 0;
 
+volatile float pedal21coefficient = 250/125;
+
 //Ziegler-Nichols method modified
 PID myPID(
   &Input,
@@ -86,6 +88,13 @@ overshot means reduce proportional and reduce integral. laziness means increase 
 */
 
 void setup() {
+  pinMode(A0, INPUT);
+  pinMode(A1, INPUT);
+  pinMode(A4, INPUT);
+  pinMode(A5, INPUT);
+  pinMode(A2, INPUT);
+  pinMode(A3, INPUT);
+  
   // PWM setup https://alexgyver.ru/lessons/pwm-overclock/
 
   // pins D9 and D10 - 62.5 kHz
@@ -103,13 +112,13 @@ void setup() {
   // pins D3 and D11 - 31.4 kHz
   TCCR2B = 0b00000001;  // x1
   TCCR2A = 0b00000001;  // phase correct 
-
-  pedalWrite(PWM1, 0); //36
-  pedalWrite(PWM2, 0); //18
+  
+  pedalWrite(PWM1, 36); //36
+  pedalWrite(PWM2, 18); //18
 
   mode = 0;
-  pedalRead();
-  pwmWrite();
+  //pedalRead();
+  //pwmWrite();
   pinMode(speedInput, INPUT_PULLUP); //INPUT or INPUT_PULLUP
   pinMode(led, OUTPUT);
   digitalWrite(led, HIGH);
@@ -130,11 +139,8 @@ void debugOut() {
     return ;
   }
   debugPrevTime = micros();
-  Serial.print(pedal1Val);
-  Serial.print(' ');
-  Serial.print(pedal2Val);
-  Serial.print(' ');
-  //Serial.println(manuallyReadSpeed);
+  Serial.println("p" + String(pedal1Val) + "/" + String(pedal2Val) + " " + String(cruise1Val) + "/" + String(cruise2Val) + "         ");
+  Serial.println("m" + String(mode) + " cs" + String(currentSpeed) + " r" + String(pedal1MinVal) + "/" + String(pedal1MaxVal) + "         ");
 }
 
 void pedalRead() {
@@ -149,25 +155,26 @@ void pedalRead() {
 }
 
 void pwmWrite() {
-  float cruise2tmp;
+  float cruise2tmp, pedal2tmp;
+  //pedal2coefficient = float(cruise1Val) * float(pedal2Val + 1) / float(pedal1Val + 1); //+1 to avoid dividing by zero
+  pedal2tmp = float(pedal1Val * pedal21coefficient);
+  cruise2tmp = cruise1Val * pedal21coefficient;
   switch (mode) {
     case 1:
-      cruise2tmp = float(cruise1Val) * float(pedal2Val + 1) / float(pedal1Val + 1); //+1 to avoid dividing by zero
-      //cruise2tmp = cruise1Val * 250 / 125;
       cruise2Val = (int) cruise2tmp;
-      if (cruise1Val > pedal1Val && cruise2Val > pedal2Val) {
+      if (cruise1Val > pedal1Val) {  //&& cruise2Val > pedal2Val
         pedalWrite(PWM1, cruise1Val);
         pedalWrite(PWM2, cruise2Val);
       } else {
         pedalWrite(PWM1, pedal1Val);
-        pedalWrite(PWM2, pedal2Val);
+        pedalWrite(PWM2, (int) pedal2tmp); //pedal2Val
         Output = (double) pedal1Val;
       }
       break;
     case 0:
     default:
       pedalWrite(PWM1, pedal1Val);
-      pedalWrite(PWM2, pedal2Val);
+      pedalWrite(PWM2, (int) pedal2tmp); //pedal2Val
       break;
   }
 }
@@ -261,7 +268,7 @@ void pedalWrite(byte output, int val) {
       correction = correction2;
       break;
   }
-  if (val < 3) correction = 0;  //ecu not yet powered up? no corrections. output zero volts.
+  //if (val < 3) correction = 0;  //ecu not yet powered up? no corrections. output zero volts.
   
   if (val + correction > 255) {
     analogWrite(output, 255);
@@ -272,7 +279,8 @@ void pedalWrite(byte output, int val) {
 
 
 void loop() {
-  myPID.SetOutputLimits(pedal1MinVal, pedal1MaxVal);
+  //myPID.SetOutputLimits( (pedal1MinVal, pedal1MaxVal);
+  myPID.SetOutputLimits( (pedal1MinVal - correction1) > 0 ? pedal1MinVal - correction1 : 1, pedal1MaxVal - correction1);
   manualSpeedRead();
   currentSpeed = manuallyReadSpeed;
   querySwitches();
